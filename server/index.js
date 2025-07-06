@@ -6,12 +6,16 @@ import session from 'express-session';
 import passport from 'passport';
 import './passport.js';
 import authRouter from './routes/auth.js';
+import connectDB from './database.js';
+import User from './models/User.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT;
+
+connectDB();
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'app', 'views'));
@@ -31,6 +35,17 @@ app.use(passport.session());
 app.use(express.static(path.join(__dirname, '..', 'app', 'public')));
 
 app.use(authRouter);
+
+
+app.get('/users', async (req, res) => {
+    try {
+        const users = await User.find();
+
+        res.render('users', { title: 'Користувачі', users });
+    } catch (error) {
+        res.status(500).send('Щось не так (users)');
+    }
+});
 
 app.get('/', (req, res) => {
     res.render('index', { title: 'Головна', user: req.user });

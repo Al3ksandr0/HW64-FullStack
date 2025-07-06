@@ -1,24 +1,35 @@
 import passport from 'passport';
-import { Strategy as LocalStrategy } from 'passport-local';
-import bcrypt from 'bcrypt';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import User from './models/User.js';
 
-export const users = [];
+// GoogleStrategy: email + пароль 
+passport.use(new GoogleStrategy(
+    {
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: 'http://localhost:3000/auth/google/callback',
+        scope: ['profile', 'email'],
+    },
+    async (accessToken, refreshToken, profile, done) => {
+        try {
+            const existingUser = await User.findOne({ googleId: profile.id });
 
-// LocalStrategy: email + пароль 
-passport.use(new LocalStrategy(
-    { usernameField: 'email', passwordField: 'password' },
-    async (email, password, done) => {
-        const user = users.find(u => u.email === email);
-        if (!user) {
-            return done(null, false, { message: 'Email не зареєстровано' });
+            if (existingUser) {
+                return done(null, existingUser);
+            }
+
+            const newUser = new User({
+                googleId: profile.id,
+                name: profile.displayName,
+                email: profile.emails[0].value,
+                hash: '',
+            });
+
+            await newUser.save();
+            done(null, newUser);
+        } catch (error) {
+            done(error);
         }
-
-        const ok = await bcrypt.compare(password, user.hash);
-        if (!ok) {
-            return done(null, false, { message: 'Пароль невірний' });
-        }
-
-        return done(null, user);
     }
 ));
 
@@ -26,7 +37,7 @@ passport.use(new LocalStrategy(
 passport.serializeUser((user, done) => done(null, user.id));
 
 // вытаскиваем пользователя из id в сессии
-passport.deserializeUser((id, done) => {
-    const user = users.find(u => u.id === id) || false;
+passport.deserializeUser(async (id, done) => {
+    const user = await User.findById(id);
     done(null, user);
 });
